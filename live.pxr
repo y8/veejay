@@ -1,0 +1,284 @@
+@ /live root:video {
+  #%autostart true
+  #%praxis.version 4.0.0-rc1
+  .renderer OpenGL
+  .width 1280
+  .height 800
+  .fps 24
+  @ ./screen video:output {
+    #%graph.x 671
+    #%graph.y 186
+    .title Live
+    .full-screen true
+    .always-on-top true
+    .undecorated true
+    .show-cursor true
+  }
+  @ ./ch1 video:gl:receive {
+    #%graph.x 177
+    #%graph.y 24
+    .server-id preview1
+  }
+  @ ./ch2 video:gl:receive {
+    #%graph.x 177
+    #%graph.y 147
+    .server-id preview2
+  }
+  @ ./start-trigger-1 core:start-trigger {
+    #%graph.x -43
+    #%graph.y 97
+  }
+  @ ./mixer1 video:gl:p2d {
+    #%graph.x 350
+    #%graph.y 71
+    .code "
+
+    @P(1) double level;
+    @P(2) double aux1;
+    @P(3) double aux2;
+    
+    @P(11)
+    String color1;
+    @P(12) 
+    String color2;
+    @P(13)
+    String color3;
+    @P(14)
+    String color4;
+    @P(15)
+    String color5;
+    
+    void updateUniforms() \{
+        shader.set(\"background\", ch2);
+        
+        shader.set(\"level\", level);
+        shader.set(\"aux1\", aux1);
+        shader.set(\"aux2\", aux2);
+        
+        setColor(\"color1\", color1);
+        setColor(\"color2\", color2);
+        setColor(\"color3\", color3);
+        setColor(\"color4\", color4);
+        setColor(\"color5\", color5);
+    \}
+   
+    void setColor(String key, String hex) \{
+        if(hex.isEmpty()) \{
+            hex = \"00FF00\";
+        \}
+        
+        hex = hex.replace(\"#\", \"\");
+
+        int red = Integer.valueOf(hex.substring(0, 2), 16);
+        int green = Integer.valueOf(hex.substring(2, 4), 16);
+        int blue = Integer.valueOf(hex.substring(4, 6), 16);
+        int alpha = 255;
+        
+        if(hex.length() == 8) \{
+            alpha = Integer.valueOf(hex.substring(6, 8), 16);
+        \}
+        
+        shader.set(key, red / 255.0, green / 255.0, blue / 255.0, alpha / 255.0);
+    \}
+    
+    // BOILERPLATE BELOW
+    @In(0)
+    PImage in;
+    @In(1)
+    PImage ch2;
+    
+    @P(0)
+    //@Type.String(mime = GLSL_FRAGMENT_MIME, template = DEFAULT_FRAGMENT_SHADER)
+    @Type.String()
+    @OnChange(\"updateShader\")
+    //@Config.Port(false)
+    String fragment;
+
+    PShader shader;
+
+    @Override
+    public void setup() \{
+        updateShader();
+    \}
+
+    @Override
+    public void draw() \{
+        if (shader == null) \{
+            System.out.println(\"Shader created preview2\");
+            shader = createShader(DEFAULT_VERTEX_SHADER,
+                    fragment.isEmpty() ? DEFAULT_FRAGMENT_SHADER : fragment);
+        \}
+        shader(shader);
+        updateUniforms();
+        image(in, 0, 0);
+        resetShader();
+    \}
+
+    void updateShader() \{
+        shader = null;
+    \}
+
+    
+"
+    .fragment "// Blend texture with background with given level
+
+uniform sampler2D texture;
+uniform sampler2D background;
+
+uniform vec2 texOffset;
+
+varying vec4 vertColor;
+varying vec4 vertTexCoord;
+
+uniform float level;
+
+void main() \{
+    vec4 texture_colour = texture2D(texture, vertTexCoord.st);
+    vec4 background_colour = texture2D(background, vertTexCoord.st);
+
+    gl_FragColor = mix(texture_colour, background_colour, level);
+\}
+"
+  }
+  @ ./an1-fade core:timing:animator {
+    #%graph.x 224
+    #%graph.y 525
+    .time 1.58
+  }
+  @ ./shader-bank1 core:custom {
+    #%graph.x 113
+    #%graph.y 268
+    .code "import static org.praxislive.video.pgl.code.userapi.Constants.*;
+import java.net.URI;
+import java.io.File;
+import java.io.BufferedReader;
+import java.io.FileReader;
+import java.io.IOException;
+import java.io.FileNotFoundException;
+import java.net.URISyntaxException;
+
+
+    @T(0) 
+    void trigger() \{
+       fileSelected();
+    \}
+    
+    @P(0) @Type(value = PResource.class, properties = \{PResource.KEY_ALLOW_EMPTY, \"true\"\})
+    @OnChange(\"fileSelected\")
+    Property file;
+ 
+    @P(1)
+    @Type.String()
+    @ReadOnly()
+    String fragment;
+    
+    @Out(0)
+    Output out;
+    
+    @Override
+    public void init() \{
+        fragment = DEFAULT_FRAGMENT_SHADER;
+    \}
+    
+    void fileSelected() \{
+        String path = file.get().toString();
+        
+        try \{
+            fragment = loadStringFromFile(path);
+            out.send(fragment);
+        \} catch(FileNotFoundException e) \{
+            System.out.println(\"File not found: \" + e.getLocalizedMessage());
+        \} catch(IOException e) \{
+            System.out.println(\"Can't read a file: \" + e.getLocalizedMessage());
+        \} catch(URISyntaxException e) \{
+            System.out.println(\"Can't parse uri: \" + e.getLocalizedMessage());
+        \};
+    \}
+    
+    String loadStringFromFile(String path) 
+    throws FileNotFoundException, IOException, URISyntaxException \{
+        URI uri = new URI(path);
+        File file = new File(uri.getPath());
+        
+        BufferedReader reader = new BufferedReader(new FileReader(file));
+        StringBuilder data = new StringBuilder();
+        char\[\] buf = new char\[1024\];
+        int read = 0;
+        while ((read = reader.read(buf)) != -1) \{
+            data.append(buf, 0, read);
+        \}
+        reader.close();
+        return data.toString();
+    \}
+    
+"
+    .file [file "resources/shaders/mixer/blend.frag"]
+  }
+  @ ./composite-1 video:composite {
+    #%graph.x 506
+    #%graph.y 97
+    .force-alpha true
+  }
+  @ ./shader-switch1 core:custom {
+    #%graph.x 69
+    #%graph.y 411
+    .code "
+
+    @P(0)
+    @OnChange(\"channelUpdated\")
+    int channel;
+    
+    @P(1)
+    @OnChange(\"listUpdated\")
+    String files;
+    
+    @P(2)
+    @ReadOnly
+    String active;
+    
+    String fileList\[\];
+    
+    @Out(0)
+    Output out;
+    
+    @Override
+    public void init() \{
+        fileList = files.split(\"\\\\r?\\\\n\");
+    \}
+
+    void channelUpdated() \{
+        System.out.println(\"Item selected: \" +  channel);
+        System.out.println(\"Total items \" +  fileList.length);
+        
+        if(fileList.length == 0 && channel < 0) \{
+            return;
+        \}
+        
+        if((channel + 1) > fileList.length) \{
+            return;
+        \}
+        
+        active = fileList\[channel\];
+        
+        out.send(active);
+    \}
+    
+    void listUpdated() \{
+        fileList = files.split(\"\\\\r?\\\\n\");
+    \}
+"
+    .files "file:/Users/y13/Documents/Apps/Praxis/TraceGL/resources/shaders/mixer/blend.frag
+file:/Users/y13/Documents/Apps/Praxis/TraceGL/resources/shaders/mixer/vsplit.frag
+file:/Users/y13/Documents/Apps/Praxis/TraceGL/resources/shaders/mixer/hsplit.frag
+file:/Users/y13/Documents/Apps/Praxis/TraceGL/resources/shaders/mixer/circle.frag"
+  }
+  ~ ./start-trigger-1!out ./ch1!start
+  ~ ./ch2!out ./mixer1!ch-2
+  ~ ./ch1!out ./mixer1!in
+  ~ ./start-trigger-1!out ./ch2!start
+  ~ ./an1-fade!out ./mixer1!level
+  ~ ./shader-bank1!out ./mixer1!fragment
+  ~ ./mixer1!out ./composite-1!src
+  ~ ./composite-1!out ./screen!in
+  ~ ./shader-switch1!out ./shader-bank1!file
+}

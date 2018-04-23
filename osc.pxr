@@ -1,0 +1,19 @@
+@ /osc root:osc {
+  #%praxis.version 4.0.0-rc1
+  @ ./mix-level osc:input {
+    .address /live/mixer1.level
+    .osc-address "/master/mix"
+  }
+  @ ./left-level osc:input {
+    .address /preview1/mixer1.level
+    .osc-address "/fx/a/mix"
+  }
+  @ ./right-level osc:input {
+    .address /preview2/mixer1.level
+    .osc-address "/fx/b/mix"
+  }
+  @ ./mix-shader-bank osc:input {
+    .address /live/shader-switch1.channel
+    .osc-address "/fx/m/fx"
+  }
+}

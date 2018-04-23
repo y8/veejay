@@ -1,0 +1,245 @@
+@ /shared root:data {
+  #%praxis.version 4.0.0-rc1
+  @ ./gl-color-mixer core:custom {
+    #%graph.x 21
+    #%graph.y 101
+    #%graph.comment video x 2\naux x 3\ncolor x 3
+    .code "
+    @T(0) 
+    void trigger() \{
+       out.send(sharedCode.get().toString());
+    \}
+    
+    @P(1)
+    @Type(value = PString.class, properties = \{
+        \"mime-type\", \"text/x-praxis-java\",
+        \"class-body-context\", \"org.praxislive.video.pgl.code.P2DClassBodyContext\"
+    \})
+    @Config.Port(false)
+    Property sharedCode;
+    
+    @Out(1) Output out;
+    
+    @Override
+    public void init() \{
+        sharedCode.linkAs(Value::toString, out::send);
+    \}
+
+"
+    .shared-code "
+
+    @P(1) double level;
+    @P(2) double aux1;
+    @P(3) double aux2;
+    
+    @P(11)
+    String color1;
+    @P(12) 
+    String color2;
+    @P(13)
+    String color3;
+    @P(14)
+    String color4;
+    @P(15)
+    String color5;
+    
+    void updateUniforms() \{
+        shader.set(\"background\", ch2);
+        
+        shader.set(\"level\", level);
+        shader.set(\"aux1\", aux1);
+        shader.set(\"aux2\", aux2);
+        
+        setColor(\"color1\", color1);
+        setColor(\"color2\", color2);
+        setColor(\"color3\", color3);
+        setColor(\"color4\", color4);
+        setColor(\"color5\", color5);
+    \}
+   
+    void setColor(String key, String hex) \{
+        if(hex.isEmpty()) \{
+            hex = \"00FF00\";
+        \}
+        
+        hex = hex.replace(\"#\", \"\");
+
+        int red = Integer.valueOf(hex.substring(0, 2), 16);
+        int green = Integer.valueOf(hex.substring(2, 4), 16);
+        int blue = Integer.valueOf(hex.substring(4, 6), 16);
+        int alpha = 255;
+        
+        if(hex.length() == 8) \{
+            alpha = Integer.valueOf(hex.substring(6, 8), 16);
+        \}
+        
+        shader.set(key, red / 255.0, green / 255.0, blue / 255.0, alpha / 255.0);
+    \}
+    
+    // BOILERPLATE BELOW
+    @In(0)
+    PImage in;
+    @In(1)
+    PImage ch2;
+    
+    @P(0)
+    //@Type.String(mime = GLSL_FRAGMENT_MIME, template = DEFAULT_FRAGMENT_SHADER)
+    @Type.String()
+    @OnChange(\"updateShader\")
+    //@Config.Port(false)
+    String fragment;
+
+    PShader shader;
+
+    @Override
+    public void setup() \{
+        updateShader();
+    \}
+
+    @Override
+    public void draw() \{
+        if (shader == null) \{
+            System.out.println(\"Shader created preview2\");
+            shader = createShader(DEFAULT_VERTEX_SHADER,
+                    fragment.isEmpty() ? DEFAULT_FRAGMENT_SHADER : fragment);
+        \}
+        shader(shader);
+        updateUniforms();
+        image(in, 0, 0);
+        resetShader();
+    \}
+
+    void updateShader() \{
+        shader = null;
+    \}
+
+    
+"
+  }
+  @ ./gl-color-preview1 core:routing:send {
+    #%graph.x 277
+    #%graph.y 36
+    .address /preview1/mixer1.code
+  }
+  @ ./gl-color-preview2 core:routing:send {
+    #%graph.x 277
+    #%graph.y 101
+    .address /preview2/mixer1.code
+  }
+  @ ./shader-file core:custom {
+    #%graph.x 21
+    #%graph.y 254
+    .code "
+    @T(0) 
+    void trigger() \{
+       out.send(sharedCode.get().toString());
+    \}
+    
+    @P(1)
+    @Type(value = PString.class, properties = \{
+        \"mime-type\", \"text/x-praxis-java\",
+        \"class-body-context\", \"org.praxislive.core.code.CoreBodyContext\"
+    \})
+    @Config.Port(false)
+    Property sharedCode;
+    
+    @Out(1) Output out;
+    
+    @Override
+    public void init() \{
+        sharedCode.linkAs(Value::toString, out::send);
+    \}
+
+"
+    .shared-code "import static org.praxislive.video.pgl.code.userapi.Constants.*;
+import java.net.URI;
+import java.io.File;
+import java.io.BufferedReader;
+import java.io.FileReader;
+import java.io.IOException;
+import java.io.FileNotFoundException;
+import java.net.URISyntaxException;
+
+
+    @T(0) 
+    void trigger() \{
+       fileSelected();
+    \}
+    
+    @P(0) @Type(value = PResource.class, properties = \{PResource.KEY_ALLOW_EMPTY, \"true\"\})
+    @OnChange(\"fileSelected\")
+    Property file;
+ 
+    @P(1)
+    @Type.String()
+    @ReadOnly()
+    String fragment;
+    
+    @Out(0)
+    Output out;
+    
+    @Override
+    public void init() \{
+        fragment = DEFAULT_FRAGMENT_SHADER;
+    \}
+    
+    void fileSelected() \{
+        String path = file.get().toString();
+        
+        try \{
+            fragment = loadStringFromFile(path);
+            out.send(fragment);
+        \} catch(FileNotFoundException e) \{
+            System.out.println(\"File not found: \" + e.getLocalizedMessage());
+        \} catch(IOException e) \{
+            System.out.println(\"Can't read a file: \" + e.getLocalizedMessage());
+        \} catch(URISyntaxException e) \{
+            System.out.println(\"Can't parse uri: \" + e.getLocalizedMessage());
+        \};
+    \}
+    
+    String loadStringFromFile(String path) 
+    throws FileNotFoundException, IOException, URISyntaxException \{
+        URI uri = new URI(path);
+        File file = new File(uri.getPath());
+        
+        BufferedReader reader = new BufferedReader(new FileReader(file));
+        StringBuilder data = new StringBuilder();
+        char\[\] buf = new char\[1024\];
+        int read = 0;
+        while ((read = reader.read(buf)) != -1) \{
+            data.append(buf, 0, read);
+        \}
+        reader.close();
+        return data.toString();
+    \}
+    
+"
+  }
+  @ ./shader-file-preview1 core:routing:send {
+    #%graph.x 277
+    #%graph.y 254
+    .address /preview1/shader-bank1.code
+  }
+  @ ./shader-file-preview2 core:routing:send {
+    #%graph.x 277
+    #%graph.y 339
+    .address /preview2/shader-bank1.code
+  }
+  @ ./gl-color-live core:routing:send {
+    #%graph.x 277
+    #%graph.y 166
+    .address /live/mixer1.code
+  }
+  @ ./shader-file-live core:routing:send {
+    #%graph.x 277
+    #%graph.y 414
+    .address /live/shader-bank1.code
+  }
+  ~ ./gl-color-mixer!out ./gl-color-preview1!in
+  ~ ./gl-color-mixer!out ./gl-color-preview2!in
+  ~ ./shader-file!out ./shader-file-preview1!in
+  ~ ./shader-file!out ./shader-file-preview2!in
+  ~ ./gl-color-mixer!out ./gl-color-live!in
+  ~ ./shader-file!out ./shader-file-live!in
+}

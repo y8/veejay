@@ -1,0 +1,63 @@
+#%praxis.version 4.0.0-rc1
+@ ./gl-filter-base video:gl:p2d {
+  #%graph.x 0
+  #%graph.y 0
+  .code "
+
+   @P(1) double limit;
+    
+    void updateUniforms() \{
+        shader.set(\"limitLevel\", limit);
+    \}
+
+    
+    // BOILERPLATE BELOW
+    @In(0)
+    PImage in;
+    @P(0)
+    @Type.String(mime = GLSL_FRAGMENT_MIME, template = DEFAULT_FRAGMENT_SHADER)
+    @OnChange(\"updateShader\")
+    @Config.Port(false)
+    String fragment;
+    
+    PShader shader;
+
+    @Override
+    public void setup() \{
+        updateShader();
+    \}
+
+    @Override
+    public void draw() \{
+        if (shader == null) \{
+            shader = createShader(DEFAULT_VERTEX_SHADER,
+                    fragment.isEmpty() ? DEFAULT_FRAGMENT_SHADER : fragment);
+        \}
+        shader(shader);
+        updateUniforms();
+        image(in, 0, 0);
+        resetShader();
+    \}
+
+    void updateShader() \{
+        shader = null;
+    \}
+
+"
+  .fragment "uniform sampler2D texture;
+
+uniform vec2 texOffset;
+
+varying vec4 vertColor;
+varying vec4 vertTexCoord;
+
+uniform float limitLevel;
+
+void main() \{  
+  vec4 texColor = texture2D(texture, vertTexCoord.st).rgba;
+  float brightness = (0.2126*texColor.r) + (0.7152*texColor.g) + (0.0722*texColor.b);
+  
+  gl_FragColor = vec4(step(limitLevel, brightness));
+\}"
+  .limit 0.55
+}

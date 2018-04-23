@@ -1,0 +1,47 @@
+#%praxis.version 4.0.0-rc1
+@ ./color-picker1 core:custom {
+  #%graph.x 0
+  #%graph.y 0
+  .code "
+
+    @P(0)
+    int alpha;
+
+    @P(1)
+    int red;
+
+    @P(2)
+    int green;
+
+    @P(3)
+    int blue;
+
+    @P(4)
+    @ReadOnly()
+    int rgba;
+    
+    @Out(0)
+    Output out;
+    
+    @Override
+    public void init() \{
+        rgba = getRgba();
+    \}
+
+    
+    @Override
+    public void update() \{
+        rgba = getRgba();
+        out.send(rgba);
+    \}
+    
+    int getRgba() \{
+        return ((alpha & 255) << 24) | ((red & 255) << 16) | ((green & 255) << 8) | (blue & 255);
+    \}
+    
+"
+  .alpha 255
+  .red 255
+  .green 255
+  .blue 255
+}

@@ -1,0 +1,19 @@
+add-libs [file-list "config/libs/*.jar"]
+
+# <<<BUILD>>>
+include [file "video.pxr"]
+include [file "gui.pxr"]
+include [file "live.pxr"]
+include [file "preview1.pxr"]
+include [file "preview2.pxr"]
+include [file "shared.pxr"]
+include [file "osc.pxr"]
+
+# <<<RUN>>>
+include [file "config/video_autostart"]
+include [file "config/gui_autostart"]
+include [file "config/live_autostart"]
+include [file "config/preview1_autostart"]
+include [file "config/preview2_autostart"]
+include [file "config/shared_autostart"]
+include [file "config/osc_autostart"]

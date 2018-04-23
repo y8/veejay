@@ -1,0 +1,166 @@
+#%praxis.version 4.0.0-rc1
+@ ./shader-bank1 core:custom {
+  #%graph.x 0
+  #%graph.y 0
+  .code "import static org.praxislive.video.pgl.code.userapi.Constants.*;
+
+
+    @P(0)
+    @Type.String(mime = GLSL_FRAGMENT_MIME, template = DEFAULT_FRAGMENT_SHADER)
+    @OnChange(\"shaderUpdated\")
+    @Config.Port(false)
+    String ch1;
+    
+    @P(1)
+    @Type.String(mime = GLSL_FRAGMENT_MIME, template = DEFAULT_FRAGMENT_SHADER)
+    @OnChange(\"shaderUpdated\")
+    @Config.Port(false)
+    String ch2;
+    
+    @P(2)
+    @Type.String(mime = GLSL_FRAGMENT_MIME, template = DEFAULT_FRAGMENT_SHADER)
+    @OnChange(\"shaderUpdated\")
+    @Config.Port(false)
+    String ch3;
+    
+    @P(3)
+    @Type.String(mime = GLSL_FRAGMENT_MIME, template = DEFAULT_FRAGMENT_SHADER)
+    @OnChange(\"shaderUpdated\")
+    @Config.Port(false)
+    String ch4;
+
+    @P(4)
+    @Type.String(mime = GLSL_FRAGMENT_MIME, template = DEFAULT_FRAGMENT_SHADER)
+    @OnChange(\"shaderUpdated\")
+    @Config.Port(false)
+    String ch5;
+    
+    @Out(0)
+    Output out;
+
+    @P(10)
+    @Type.String(allowed=\{\"ch1\", \"ch2\", \"ch3\", \"ch4\", \"ch5\", \"None\"\})
+    @OnChange(\"shaderUpdated\")
+    String active;
+    
+    @P(13)
+    @Type.String()
+    @ReadOnly()
+    String currentValue;
+    
+    @Override
+    public void init() \{
+        currentValue = DEFAULT_FRAGMENT_SHADER;
+    \}
+
+    
+    @Override
+    public void update() \{
+        out.send(currentValue);        
+    \}
+    
+    void shaderUpdated() \{
+        currentValue = null;
+        switch(active) \{
+            case \"ch1\": currentValue = ch1;
+                        break;
+            case \"ch2\": currentValue = ch2;
+                        break;
+            case \"ch3\": currentValue = ch3;
+                        break;
+            case \"ch4\": currentValue = ch4;
+                        break;
+            default: currentValue = DEFAULT_FRAGMENT_SHADER;
+        \}
+        
+        System.out.println(\"shaderUpdate\");
+        out.send(currentValue);        
+    \}
+
+"
+  .ch-1 "// Blend texture with background with given level
+
+uniform sampler2D texture;
+uniform sampler2D background;
+
+uniform vec2 texOffset;
+
+varying vec4 vertColor;
+varying vec4 vertTexCoord;
+
+uniform float level;
+
+void main() \{
+    vec4 texture_colour = texture2D(texture, vertTexCoord.st);
+    vec4 background_colour = texture2D(background, vertTexCoord.st);
+    gl_FragColor = mix(texture_colour, background_colour, level);
+\}"
+  .ch-2 "// Vertically split screen between texture and background by ratio of level
+
+uniform sampler2D texture;
+uniform sampler2D background;
+
+uniform vec2 texOffset;
+
+varying vec4 vertColor;
+varying vec4 vertTexCoord;
+
+uniform float level;
+
+void main() \{
+    if(level < vertTexCoord.st.x) \{
+        gl_FragColor = texture2D(texture, vertTexCoord.st);
+    \} else \{
+        gl_FragColor = texture2D(background, vertTexCoord.st);    
+    \}
+\}"
+  .ch-3 "// Horizontally split screen between texture and background by ratio of level
+
+uniform sampler2D texture;
+uniform sampler2D background;
+
+uniform vec2 texOffset;
+
+varying vec4 vertColor;
+varying vec4 vertTexCoord;
+
+uniform float level;
+
+void main() \{
+    if(level < vertTexCoord.st.y) \{
+        gl_FragColor = texture2D(texture, vertTexCoord.st);
+    \} else \{
+        gl_FragColor = texture2D(background, vertTexCoord.st);    
+    \}
+\}"
+  .ch-4 "// Sin wave mix
+uniform sampler2D texture;
+
+uniform vec2 texOffset;
+
+varying vec4 vertColor;
+varying vec4 vertTexCoord;
+
+void main() \{
+   // vec2 st = vertTexCoord.xy/u_resolution.xy;
+    vec3 color = vec3(0.0);
+
+    vec2 pos = vec2(0.5)-st;
+
+    float r = length(pos)*2.0;
+    float a = atan(pos.y,pos.x);
+
+    float f = cos(a*3.);
+    // f = abs(cos(a*3.));
+    // f = abs(cos(a*2.5))*.5+.3;
+    // f = abs(cos(a*12.)*sin(a*3.))*.8+.1;
+    // f = smoothstep(-.5,1., cos(a*10.))*0.2+0.5;
+
+    color = vec3( 1.-smoothstep(f,f+0.02,r) );
+
+    gl_FragColor = vec4(color, 1.0);
+
+  gl_FragColor = texture2D(texture, vertTexCoord.st) * vertColor;
+\}"
+  .active ch3
+}

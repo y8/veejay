@@ -1,0 +1,32 @@
+#%praxis.version 4.0.0-rc1
+@ ./shared-coder core:custom {
+  #%graph.x 0
+  #%graph.y 0
+  .code "
+
+    @P(1)
+    @Type(value = PString.class, properties = \{
+        \"mime-type\", \"text/x-praxis-java\",
+        \"class-body-context\", \"org.praxislive.video.pgl.code.P2DClassBodyContext\"
+    \})
+    @Config.Port(false)
+    Property sharedCode;
+    
+    @Out(1) Output out;
+    
+    @Override
+    public void init() \{
+        sharedCode.linkAs(Value::toString, out::send);
+    \}
+
+"
+  .shared-code "
+
+    public void draw() \{
+        fill(100,100,255);
+        stroke(255);
+        rect(100,100,100,100); 
+    \}
+    
+"
+}

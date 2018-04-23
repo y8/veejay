@@ -1,0 +1,4 @@
+resources/videos/*
+resources/components/Video/*
+resources/components/VideoGL/*
+.DS_Store

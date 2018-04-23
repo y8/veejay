@@ -1,0 +1,188 @@
+@ /video root:video {
+  #%autostart true
+  #%praxis.version 4.0.0-rc1
+  .renderer "OpenGL:GL4"
+  .width 800
+  .height 600
+  .fps 24
+  @ ./screen video:output {
+    #%graph.x 506
+    #%graph.y 86
+    .title Preview
+    .always-on-top true
+    .show-cursor true
+  }
+  @ ./player-1 video:player {
+    #%graph.x 63
+    #%graph.y 26
+    .code "import org.praxislive.video.gstreamer.*;
+
+
+    enum ResizeMode \{Stretch, Scale, Crop\};
+    
+    @T(1) Trigger play;
+    @T(2) Trigger pause;
+    @T(3) Trigger stop;
+    
+    @P(1) @Type(value = PResource.class, properties = \{PResource.KEY_ALLOW_EMPTY, \"true\"\})
+    Property video;
+    @P(2) @OnChange(\"seek\") @Type.Number(min = 0, max = 1)
+    double position;
+    @P(3) @Type.Number(def = 1)
+    Property rate;
+    @P(4) @Type.Boolean(def = true)
+    Property loop;
+    @P(5)
+    ResizeMode resizeMode;
+    @P(6) @Type.Number(min = 0, max = 1, def = 0.5)
+    double alignX;
+    @P(7) @Type.Number(min = 0, max = 1, def = 0.5)
+    double alignY;
+    @P(8) @Type.Number(min = 0, max = 8, def = 1, skew = 4)
+    double zoom;
+    @P(9) @Type.String(suggested = \"autoaudiosink\") @Config.Port(false)
+    Property audioSink;
+    @P(10) @ReadOnly
+    String state;
+    
+    @Inject VideoPlayer player;
+
+    @AuxOut(1) Output ready;
+    @AuxOut(2) Output error;
+    @AuxOut(3) Output eos;
+    
+
+    @Override
+    public void init() \{
+        video.linkAs(PResource::from, player::location);
+        rate.link(player::rate);
+        loop.valuesAs(PBoolean.class).link(b -> player.looping(b.value()));
+        play.link(player::play);
+        pause.link(player::pause);
+        stop.link(player::stop);
+        audioSink.linkAs(Value::toString, player::audioSink);
+        player.onReady(ready::send);
+        player.onError(msg -> \{
+            log(ERROR, msg);
+            error.send(msg);
+        \});
+        player.onEOS(eos::send);
+    \}
+
+    @Override
+    public void draw() \{
+        if (player.render(this::drawFrame)) \{
+            position = player.position();
+        \} else \{
+            position = 0;
+        \}
+        state = player.state().toString();
+    \}
+
+    void drawFrame(PImage frame) \{
+        //image(frame, 0, 0);
+        double outWidth = zoom * frame.width;
+        double outHeight = zoom * frame.height;
+        if (resizeMode == ResizeMode.Stretch) \{
+            outWidth *= (double) width / frame.width;
+            outHeight *= (double) height / frame.height;
+        \} else if (resizeMode == ResizeMode.Scale) \{
+            double r = min((double) width / frame.width, (double) height / frame.height);
+            outWidth *= r;
+            outHeight *= r;
+        \}
+        
+        image(frame, alignX * (width - outWidth),
+                alignY * (height - outHeight),
+                outWidth,
+                outHeight);
+    \}
+    
+    void seek() \{
+        player.position(position);
+    \}
+
+"
+    .video [file "resources/andy/andy_boogie_dance.mov"]
+    .position 0.13673322414039477
+    .rate 1.5
+    .resize-mode Scale
+    .zoom 1.34
+  }
+  @ ./start-trigger-1 core:start-trigger {
+    #%graph.x -170
+    #%graph.y 26
+  }
+  @ ./gl-filter-base video:gl:p2d {
+    #%graph.x 251
+    #%graph.y 26
+    .code "
+
+   @P(1) double limit;
+    
+    void updateUniforms() \{
+        shader.set(\"limitLevel\", limit);
+    \}
+
+    
+    // BOILERPLATE BELOW
+    @In(0)
+    PImage in;
+    @P(0)
+    @Type.String(mime = GLSL_FRAGMENT_MIME, template = DEFAULT_FRAGMENT_SHADER)
+    @OnChange(\"updateShader\")
+    @Config.Port(false)
+    String fragment;
+    
+    PShader shader;
+
+    @Override
+    public void setup() \{
+        updateShader();
+    \}
+
+    @Override
+    public void draw() \{
+        if (shader == null) \{
+            shader = createShader(DEFAULT_VERTEX_SHADER,
+                    fragment.isEmpty() ? DEFAULT_FRAGMENT_SHADER : fragment);
+        \}
+        shader(shader);
+        updateUniforms();
+        image(in, 0, 0);
+        resetShader();
+    \}
+
+    void updateShader() \{
+        shader = null;
+    \}
+
+"
+    .fragment "uniform sampler2D texture;
+
+uniform vec2 texOffset;
+
+varying vec4 vertColor;
+varying vec4 vertTexCoord;
+
+uniform float limitLevel;
+
+void main() \{  
+  vec4 texColor = texture2D(texture, vertTexCoord.st).rgba;
+  float brightness = (0.2126*texColor.r) + (0.7152*texColor.g) + (0.0722*texColor.b);
+  
+  gl_FragColor = vec4(step(limitLevel, brightness));
+\}"
+    .limit 0.55
+  }
+  @ ./send-1 video:gl:send {
+    #%graph.x 300
+    #%graph.y 197
+    .server-id live1
+  }
+  ~ ./start-trigger-1!out ./player-1!play
+  ~ ./player-1!out ./gl-filter-base!in
+  ~ ./gl-filter-base!out ./send-1!in
+  ~ ./send-1!out ./screen!in
+  ~ ./start-trigger-1!out ./send-1!start
+}

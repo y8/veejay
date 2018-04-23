@@ -1,0 +1,54 @@
+#%praxis.version 4.0.0-rc1
+@ ./shader-switch1 core:custom {
+  #%graph.x 0
+  #%graph.y 0
+  .code "
+
+    @P(0)
+    @OnChange(\"channelUpdated\")
+    int channel;
+    
+    @P(1)
+    @OnChange(\"listUpdated\")
+    String files;
+    
+    @P(2)
+    @ReadOnly
+    String active;
+    
+    String fileList\[\];
+    
+    @Out(0)
+    Output out;
+    
+    @Override
+    public void init() \{
+        fileList = files.split(\"\\\\r?\\\\n\");
+    \}
+
+    void channelUpdated() \{
+        System.out.println(\"Item selected: \" +  channel);
+        System.out.println(\"Total items \" +  fileList.length);
+        
+        if(fileList.length == 0 && channel < 0) \{
+            return;
+        \}
+        
+        if((channel + 1) > fileList.length) \{
+            return;
+        \}
+        
+        active = fileList\[channel\];
+        
+        out.send(active);
+    \}
+    
+    void listUpdated() \{
+        fileList = files.split(\"\\\\r?\\\\n\");
+    \}
+"
+  .files "file:/Users/y13/Documents/Apps/Praxis/TraceGL/resources/shaders/mixer/blend.frag
+file:/Users/y13/Documents/Apps/Praxis/TraceGL/resources/shaders/mixer/vsplit.frag
+file:/Users/y13/Documents/Apps/Praxis/TraceGL/resources/shaders/mixer/hsplit.frag
+file:/Users/y13/Documents/Apps/Praxis/TraceGL/resources/shaders/mixer/circle.frag"
+}

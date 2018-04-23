@@ -1,0 +1,238 @@
+@ /preview2 root:video {
+  #%autostart true
+  #%praxis.version 4.0.0-rc1
+  .renderer OpenGL
+  .width 800
+  .height 600
+  .fps 24
+  @ ./screen video:output {
+    #%graph.x 788
+    #%graph.y 60
+    .title Right
+    .device 2
+    .width 320
+    .height 240
+    .always-on-top true
+    .show-cursor true
+  }
+  @ ./player-1 video:player {
+    #%graph.x 230
+    #%graph.y 81
+    .video [file "resources/val_720p/val_dance.mov"]
+    .position 0.7791878527641307
+    .resize-mode Crop
+    .zoom 0.8806025134079998
+  }
+  @ ./start-trigger-1 core:start-trigger {
+    #%graph.x 3
+    #%graph.y 150
+  }
+  @ ./send-2 video:gl:send {
+    #%graph.x 639
+    #%graph.y 60
+    .server-id preview2
+  }
+  @ ./mixer1 video:gl:p2d {
+    #%graph.x 448
+    #%graph.y 185
+    .code "
+
+    @P(1) double level;
+    @P(2) double aux1;
+    @P(3) double aux2;
+    
+    @P(11)
+    String color1;
+    @P(12) 
+    String color2;
+    @P(13)
+    String color3;
+    @P(14)
+    String color4;
+    @P(15)
+    String color5;
+    
+    void updateUniforms() \{
+        shader.set(\"background\", ch2);
+        
+        shader.set(\"level\", level);
+        shader.set(\"aux1\", aux1);
+        shader.set(\"aux2\", aux2);
+        
+        setColor(\"color1\", color1);
+        setColor(\"color2\", color2);
+        setColor(\"color3\", color3);
+        setColor(\"color4\", color4);
+        setColor(\"color5\", color5);
+    \}
+   
+    void setColor(String key, String hex) \{
+        if(hex.isEmpty()) \{
+            hex = \"00FF00\";
+        \}
+        
+        hex = hex.replace(\"#\", \"\");
+
+        int red = Integer.valueOf(hex.substring(0, 2), 16);
+        int green = Integer.valueOf(hex.substring(2, 4), 16);
+        int blue = Integer.valueOf(hex.substring(4, 6), 16);
+        int alpha = 255;
+        
+        if(hex.length() == 8) \{
+            alpha = Integer.valueOf(hex.substring(6, 8), 16);
+        \}
+        
+        shader.set(key, red / 255.0, green / 255.0, blue / 255.0, alpha / 255.0);
+    \}
+    
+    // BOILERPLATE BELOW
+    @In(0)
+    PImage in;
+    @In(1)
+    PImage ch2;
+    
+    @P(0)
+    //@Type.String(mime = GLSL_FRAGMENT_MIME, template = DEFAULT_FRAGMENT_SHADER)
+    @Type.String()
+    @OnChange(\"updateShader\")
+    //@Config.Port(false)
+    String fragment;
+
+    PShader shader;
+
+    @Override
+    public void setup() \{
+        updateShader();
+    \}
+
+    @Override
+    public void draw() \{
+        if (shader == null) \{
+            System.out.println(\"Shader created preview2\");
+            shader = createShader(DEFAULT_VERTEX_SHADER,
+                    fragment.isEmpty() ? DEFAULT_FRAGMENT_SHADER : fragment);
+        \}
+        shader(shader);
+        updateUniforms();
+        image(in, 0, 0);
+        resetShader();
+    \}
+
+    void updateShader() \{
+        shader = null;
+    \}
+
+    
+"
+    .fragment "// Contour
+uniform sampler2D texture;
+uniform sampler2D background;
+
+uniform vec2 texOffset;
+
+varying vec4 vertColor;
+varying vec4 vertTexCoord;
+
+uniform float level;
+
+uniform vec4 color1;
+uniform vec4 color2;
+uniform vec4 color3;
+uniform vec4 color4;
+
+void main() \{
+    vec4 texColor = texture2D(texture, vertTexCoord.st).rgba;
+    float brightness = (0.2126*texColor.r) + (0.7152*texColor.g) + (0.0722*texColor.b);
+
+    float enabled = step(level, brightness);
+
+    gl_FragColor = color1 * enabled + color2 * (1 - enabled);
+\}
+"
+    .level 0.23412705957889557
+    .color-1 "#5a7247"
+    .color-2 "#f6d155"
+  }
+  @ ./shader-bank1 core:custom {
+    #%graph.x 350
+    #%graph.y 562
+    .code "import static org.praxislive.video.pgl.code.userapi.Constants.*;
+import java.net.URI;
+import java.io.File;
+import java.io.BufferedReader;
+import java.io.FileReader;
+import java.io.IOException;
+import java.io.FileNotFoundException;
+import java.net.URISyntaxException;
+
+
+    @T(0) 
+    void trigger() \{
+       fileSelected();
+    \}
+    
+    @P(0) @Type(value = PResource.class, properties = \{PResource.KEY_ALLOW_EMPTY, \"true\"\})
+    @OnChange(\"fileSelected\")
+    Property file;
+ 
+    @P(1)
+    @Type.String()
+    @ReadOnly()
+    String fragment;
+    
+    @Out(0)
+    Output out;
+    
+    @Override
+    public void init() \{
+        fragment = DEFAULT_FRAGMENT_SHADER;
+    \}
+    
+    void fileSelected() \{
+        String path = file.get().toString();
+        
+        try \{
+            fragment = loadStringFromFile(path);
+            out.send(fragment);
+        \} catch(FileNotFoundException e) \{
+            System.out.println(\"File not found: \" + e.getLocalizedMessage());
+        \} catch(IOException e) \{
+            System.out.println(\"Can't read a file: \" + e.getLocalizedMessage());
+        \} catch(URISyntaxException e) \{
+            System.out.println(\"Can't parse uri: \" + e.getLocalizedMessage());
+        \};
+    \}
+    
+    String loadStringFromFile(String path) 
+    throws FileNotFoundException, IOException, URISyntaxException \{
+        URI uri = new URI(path);
+        File file = new File(uri.getPath());
+        
+        BufferedReader reader = new BufferedReader(new FileReader(file));
+        StringBuilder data = new StringBuilder();
+        char\[\] buf = new char\[1024\];
+        int read = 0;
+        while ((read = reader.read(buf)) != -1) \{
+            data.append(buf, 0, read);
+        \}
+        reader.close();
+        return data.toString();
+    \}
+    
+"
+    .file [file "resources/shaders/filter/countour.frag"]
+  }
+  @ ./composite-1 video:composite {
+    #%graph.x 677
+    #%graph.y 215
+    .force-alpha true
+  }
+  ~ ./start-trigger-1!out ./player-1!play
+  ~ ./start-trigger-1!out ./send-2!start
+  ~ ./player-1!out ./mixer1!in
+  ~ ./mixer1!out ./send-2!in
+  ~ ./player-1!ready ./player-1!play
+  ~ ./shader-bank1!out ./mixer1!fragment
+  ~ ./send-2!out ./composite-1!src
+  ~ ./composite-1!out ./screen!in
+}

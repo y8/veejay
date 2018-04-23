@@ -1,0 +1,95 @@
+#%praxis.version 4.0.0-rc1
+@ ./mixer1 video:gl:p2d {
+  #%graph.x 0
+  #%graph.y 0
+  .code "
+
+    @P(1) double level;
+    
+    @P(5) int color1;
+    
+    void updateUniforms() \{
+        shader.set(\"background\", ch2);
+        shader.set(\"level\", level);
+        shader.set(\"color1\", color1);
+    \}
+    
+    // BOILERPLATE BELOW
+    @In(0)
+    PImage in;
+    @In(1)
+    PImage ch2;
+    
+    @P(0)
+    //@Type.String(mime = GLSL_FRAGMENT_MIME, template = DEFAULT_FRAGMENT_SHADER)
+    @Type.String()
+    @OnChange(\"updateShader\")
+    //@Config.Port(false)
+    String fragment;
+
+    PShader shader;
+
+    @Override
+    public void setup() \{
+        updateShader();
+    \}
+
+    @Override
+    public void draw() \{
+        if (shader == null) \{
+            System.out.println(\"Creating shader\");
+            shader = createShader(DEFAULT_VERTEX_SHADER,
+                    fragment.isEmpty() ? DEFAULT_FRAGMENT_SHADER : fragment);
+        \}
+        shader(shader);
+        updateUniforms();
+        image(in, 0, 0);
+        resetShader();
+    \}
+
+    void updateShader() \{
+        shader = null;
+    \}
+
+"
+  .fragment "// Threshhold with color
+uniform sampler2D texture;
+uniform sampler2D background;
+
+uniform vec2 texOffset;
+
+varying vec4 vertColor;
+varying vec4 vertTexCoord;
+
+uniform float level;
+
+uniform int color1;
+
+vec4 getRGBA(int color) \{
+//    float r = (color & 0xf000) / 255.0;
+//    float g = (color & 0x0f00) / 255.0;
+//    float b = (color & 0x00f0) / 255.0;
+//    float a = (color & 0x000f) / 255.0;
+
+    float a = (color >> 24) & 255;
+    float r = (color >> 16) & 255;
+    float g = (color >> 8) & 255;
+    float b = color & 255;
+
+    return vec4(r, g, b, a);
+\}
+
+void main() \{
+    vec4 texColor = texture2D(texture, vertTexCoord.st).rgba;
+    float brightness = (0.2126*texColor.r) + (0.7152*texColor.g) + (0.0722*texColor.b);
+    
+    vec4 c1 = getRGBA(color1) * step(level, brightness);
+
+    //gl_FragColor = texture2D(texture, vertTexCoord.st);
+    gl_FragColor = c1;
+\}
+
+"
+  .level 0.462
+  .color-1 -16711936
+}
